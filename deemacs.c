@@ -8,6 +8,9 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
+
+#include "input.h"
 
 // file informations
 FILE* f;
@@ -21,14 +24,45 @@ int64_t buf_size;
 int64_t buf_cap;
 
 // buffer position top left
-int buf_r, buf_c;
+int64_t buf_r, buf_c;
 
-// cursor position in buffer
+// cursor position in editor buffer
 int cur_r,cur_c;
+
+// cursor position in buffer content
+int64_t cur_buf_r() { return buf_r + cur_r; }
+int64_t cur_buf_c() { return buf_c + cur_c; }
 
 // window informations
 int nrows; //< nrows is minus 1 than actual nrows - this is used for the status bar
 int ncols;
+
+// functions
+
+typedef void (*function_t) (int32_t first, int32_t second);
+
+struct Binding
+{
+  int first;
+  int second;
+  function_t func;
+};
+
+void f_exit()
+{
+  exit(0);
+}
+
+struct Binding bindings[] =
+{
+  { 'x' | KBD_CTRL, 'c' | KBD_CTRL, f_exit },
+}
+;
+
+void cleanup_at_exit()
+{
+  endwin();
+}
 
 void cleanup( int eval )
 {
@@ -90,8 +124,9 @@ void remove_line_from_buf( int64_t line_num )
 void add_char_to_buf( char c, int64_t line_num, int64_t pos )
 {
   int64_t len = strlen( buf[line_num] );
-  buf[line_num] = realloc( buf[line_num], len );
+  buf[line_num] = realloc( buf[line_num], len + 1 + 1 );
   memmove( buf[line_num] + pos +1, buf[line_num] + pos, len-pos+1 );
+  buf[line_num][pos]=c;
 }
 void remove_char_from_buf( int64_t line_num, int64_t pos )
 {
@@ -99,6 +134,22 @@ void remove_char_from_buf( int64_t line_num, int64_t pos )
   memmove( buf[line_num]+pos, buf[line_num]+pos+1, (len - pos - 1 + 1 ) );
 }
 
+int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
+{
+/*  if ( y < 0 || y >= buf_size || x < 0 )
+    return 0;
+  int64_t len = strlen( buf[ y ] );
+  if ( x >= len )
+    return 0;
+
+  buf_r + cur_r
+
+  move( cur_r, cur_c );
+  
+  buf_r = y;
+  buf_c = x;*/
+  return 0;
+}
 
 void open_file()
 {
@@ -142,6 +193,8 @@ int main( int argn, char** argv )
 
   open_file();
 
+  atexit( cleanup_at_exit );
+
   editor();
 
   endwin();
@@ -149,7 +202,7 @@ int main( int argn, char** argv )
   return 0;
 }
 
-void refresh_status_bar()
+void refresh_status_bar( const char* extra_info )
 {
   if ( nrows < 0 )
     return;
@@ -159,24 +212,28 @@ void refresh_status_bar()
   attroff(A_BOLD);
   if ( has_color ) attroff(COLOR_PAIR(1));
 
-/*  addstr( "    (" );
-  attron(A_BOLD);
-  printw( "%d", cur_r+1 );
-  attroff(A_BOLD);
-  printw( "/%d,", buf_size );
-  attron(A_BOLD);
-  printw( "%d", cur_c );
-  attroff(A_BOLD);
-  printw( "/%d)", strlen(buf[cur_r]) );*/
-  printw( "    %d%%  (%d/%d,%d/%d)", (buf_r)*100/buf_size, cur_r+1, buf_size, cur_c, strlen(buf[cur_r]) );
+  printw( "    %d%%  (%d/%d,%d/%d)", (buf_r)*100/buf_size, cur_buf_r()+1, buf_size, cur_buf_c(), strlen(buf[cur_buf_r()]) );
+
+  if ( extra_info && *extra_info != 0 )
+  {
+    int elen = strlen( extra_info );
+    int xpos = ncols - elen - 1;
+    if ( xpos < 0 ) xpos = 0;
+    if ( has_color ) attron(COLOR_PAIR(2));
+    attron(A_STANDOUT);
+    mvaddstr( nrows, xpos, extra_info );
+    attroff(A_STANDOUT);
+    if ( has_color ) attroff(COLOR_PAIR(2));
+  }
+  
   clrtoeol();
   move( cur_r, cur_c );
 }
 
-void refresh_all()
+void refresh_buffer( int64_t starting_from_line )
 {
-  clear();
-  for ( int64_t i = 0; i < nrows && i < buf_size; ++i )
+  int64_t i = starting_from_line;
+  for ( ; i < nrows && i < buf_size; ++i )
   {
     if ( i + buf_r > buf_size )
       break;
@@ -193,7 +250,17 @@ void refresh_all()
       mvaddstr( i, 0, buf[i] );
     clrtoeol();
   }
-  refresh_status_bar();
+  for ( ; i < nrows; ++i )
+  {
+    move( i, 0 );
+    clrtoeol();
+  }
+}
+
+void refresh_all()
+{
+  refresh_buffer( 0 );
+  refresh_status_bar( 0 );
   move( cur_r, cur_c );
   // refresh(); not required?
 }
@@ -205,45 +272,98 @@ void init_colors()
     return;
   start_color();
   init_pair(1, COLOR_RED, COLOR_BLACK);
+  init_pair(2, COLOR_YELLOW, COLOR_BLACK);
 }
 
 
-bool handle_input( int input )
+void key_is_undefined_action( int32_t first, int32_t second )
 {
-  switch ( input )
+  char* to_print = deemacs_key_to_str_representation( first );
+
+  if ( second != KBD_NOKEY )
   {
-  case KEY_UP:
-    --cur_r;
-    move(cur_r,cur_c);
-    refresh_status_bar();
-    return true;
-  case KEY_DOWN:
-    ++cur_r;
-    move(cur_r,cur_c);
-    refresh_status_bar();
-    return true;
-  case KEY_RIGHT:
-    ++cur_c;
-    move(cur_r,cur_c);
-    refresh_status_bar();
-    return true;
-  case KEY_LEFT:
-    --cur_c;
-    move(cur_r,cur_c);
-    refresh_status_bar();
-    return true;
-  case 'q':
-    return false;
-  default:
-    addch( input );
+    char* tmp = deemacs_key_to_str_representation( second );
+    strcat( to_print, " ");
+    strcat( to_print, tmp);
+    free( tmp );
+  }
+
+  strcat( to_print, " is undefined" );
+
+  refresh_status_bar( to_print );
+  
+  beep();
+  free( to_print );
+}
+
+void f_add_char( int32_t c, int32_t no_key )
+{
+  assert( no_key == KBD_NOKEY );
+  add_char_to_buf( c, cur_buf_r(), cur_buf_c() );
+  ++cur_c;
+  refresh_all();
+}
+
+bool handle_input()
+{
+  int32_t first_key = deemacs_next_key();
+
+  if ( first_key <= 255 && isalnum( first_key ) )
+  {
+    f_add_char( first_key, KBD_NOKEY );
     return true;
   }
+
+  bool prefix_exists = 0;
+
+  for ( int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i )
+  {
+    struct Binding* tmp = &bindings[i];
+    if ( tmp->first == first_key )
+    {
+      prefix_exists = 1;
+      if ( tmp->second == KBD_NOKEY )
+      {
+        // match
+        tmp->func( first_key, KBD_NOKEY );
+        return true;
+      }
+    }
+  }
+
+  if ( ! prefix_exists )
+  {
+    key_is_undefined_action( first_key, KBD_NOKEY );
+    return true;
+  }
+
+  int32_t second_key = deemacs_next_key();
+  printw( " %d", second_key );
+
+  char* keystr2 = deemacs_key_to_str_representation( second_key );
+  addstr( keystr2 );
+  free( keystr2 );
+
+  for ( int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i )
+  {
+    struct Binding* tmp = &bindings[i];
+    if ( tmp->first == first_key && tmp->second == second_key )
+    {
+      tmp->func( first_key, KBD_NOKEY );
+      return true;
+    }
+  }
+
+  key_is_undefined_action( first_key, second_key );
+  return true;
+  
+  
 }
 
 void editor()
 {
   WINDOW* wnd = initscr();
-  cbreak();
+  raw();
   noecho();
   nonl();
   intrflush(stdscr, FALSE);
@@ -255,5 +375,5 @@ void editor()
   --nrows;
 
   refresh_all();
-  while ( handle_input( getch() ) );
+  while ( handle_input() );
 }
