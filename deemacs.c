@@ -48,14 +48,67 @@ struct Binding
   function_t func;
 };
 
-void f_exit()
+void refresh_all();
+
+void refresh_status_bar( const char* extra_info );
+
+/// >>>> functions begin
+
+static void f_exit()
 {
   exit(0);
 }
 
+void write_file();
+
+static void f_save()
+{
+  char* tmp = malloc( strlen("saving ") + strlen( file_name ) + 1 );
+  *tmp = 0;
+  strcpy( tmp, "saving " );
+  strcat( tmp, file_name );
+  refresh_status_bar( tmp );
+  write_file();
+  strcpy( tmp, "saved " );
+  strcat( tmp, file_name );
+  refresh_status_bar( tmp );
+  free(tmp);
+}
+
+int try_move_cursor_to_buf_pos( int64_t y, int64_t x );
+
+static void f_forward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()+1 ) == 0 ) beep(); }
+static void f_backward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1 ) == 0 ) beep(); }
+static void f_next_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c() ) == 0 ) beep(); }
+static void f_previous_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()-1, cur_buf_c() ) == 0 ) beep(); }
+static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), strlen( buf[cur_buf_r()] ) ) == 0 ) beep(); }
+static void f_move_beginning_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0 ) == 0 ) beep(); }
+
+static void f_keyboard_quit() { refresh_all(); beep(); }
+
+/// <<<< functions end
+
+
 struct Binding bindings[] =
 {
+// movement
+  { 'n' | KBD_CTRL, KBD_NOKEY, f_next_line },
+  { 'p' | KBD_CTRL, KBD_NOKEY, f_previous_line },
+  { 'f' | KBD_CTRL, KBD_NOKEY, f_forward_char },
+  { 'b' | KBD_CTRL, KBD_NOKEY, f_backward_char },
+  { KBD_DOWN, KBD_NOKEY, f_next_line },
+  { KBD_UP, KBD_NOKEY, f_previous_line },
+  { KBD_RIGHT, KBD_NOKEY, f_forward_char },
+  { KBD_LEFT, KBD_NOKEY, f_backward_char },
+
+
+  { 'a' | KBD_CTRL, KBD_NOKEY, f_move_beginning_of_line },
+  { 'e' | KBD_CTRL, KBD_NOKEY, f_move_end_of_line },
+
   { 'x' | KBD_CTRL, 'c' | KBD_CTRL, f_exit },
+  { 'x' | KBD_CTRL, 's' | KBD_CTRL, f_save },
+
+  { 'g' | KBD_CTRL, KBD_NOKEY, f_keyboard_quit },
 }
 ;
 
@@ -136,19 +189,71 @@ void remove_char_from_buf( int64_t line_num, int64_t pos )
 
 int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
 {
-/*  if ( y < 0 || y >= buf_size || x < 0 )
+  if ( y < 0 || y >= buf_size || x < 0 )
     return 0;
   int64_t len = strlen( buf[ y ] );
-  if ( x >= len )
+  if ( x > len )
     return 0;
 
-  buf_r + cur_r
+  int64_t ydiff = y - buf_r;
+  int64_t xdiff = x - buf_c;
 
-  move( cur_r, cur_c );
-  
-  buf_r = y;
-  buf_c = x;*/
-  return 0;
+  if ( ydiff >= 0 && ydiff < nrows && xdiff >= 0 && xdiff < ncols )
+  {
+    // finished - only move required
+    cur_r = ydiff;
+    cur_c = xdiff;
+    move( cur_r, cur_c );
+    return 1;
+  }
+
+  // todo(dees): function is unfinished
+
+  // probably also update of buf_r / buf_c required
+  if ( ydiff < 0 )
+  {
+    // lines fit all into screen
+    if ( nrows >= buf_size )
+    {
+      buf_r = 0;
+      cur_r = 0;
+    }
+    else
+    {
+      int64_t curbr = cur_buf_r();
+      (void)curbr;
+      int64_t pre_buf_r = buf_r;
+      buf_r = buf_r - (nrows+1)/2;
+      if ( buf_r < 0 ) buf_r = 0;
+      cur_r += pre_buf_r-buf_r;
+      assert( cur_buf_r() < buf_size );
+    }
+  }
+  else if ( ydiff >= nrows )
+  {
+    // Shouldn't happen, I think. Still handle it, Oo.
+    // todo...
+  }
+  else
+  {
+    buf_r = y;
+  }
+
+  // y has moved, recalculate
+  len = strlen( buf[ cur_buf_r() ] );
+
+/*
+  if ( xdiff < 0 )
+  {
+    xdiff = 0;
+  }
+  else if ( xdiff > 
+*/
+
+  cur_buf_r();
+  cur_buf_c();
+  return 1;
+//  buf_r + cur_r
 }
 
 void open_file()
@@ -214,6 +319,8 @@ void refresh_status_bar( const char* extra_info )
 
   printw( "    %d%%  (%d/%d,%d/%d)", (buf_r)*100/buf_size, cur_buf_r()+1, buf_size, cur_buf_c(), strlen(buf[cur_buf_r()]) );
 
+  clrtoeol();
+
   if ( extra_info && *extra_info != 0 )
   {
     int elen = strlen( extra_info );
@@ -278,7 +385,11 @@ void init_colors()
 
 void key_is_undefined_action( int32_t first, int32_t second )
 {
-  char* to_print = deemacs_key_to_str_representation( first );
+  char to_print[64];
+  to_print[0] = 0;
+  char* tmp1 = deemacs_key_to_str_representation( first );
+  strcat( to_print, tmp1 );
+  free(tmp1);
 
   if ( second != KBD_NOKEY )
   {
@@ -293,7 +404,6 @@ void key_is_undefined_action( int32_t first, int32_t second )
   refresh_status_bar( to_print );
   
   beep();
-  free( to_print );
 }
 
 void f_add_char( int32_t c, int32_t no_key )
@@ -338,10 +448,17 @@ bool handle_input()
   }
 
   int32_t second_key = deemacs_next_key();
-  printw( " %d", second_key );
+//  printw( " %d", second_key );
+
+  // special case: CTRL-G: break everything
+  if ( second_key == (KBD_CTRL | 'g') )
+  {
+    f_keyboard_quit();
+    return true;
+  }
 
   char* keystr2 = deemacs_key_to_str_representation( second_key );
-  addstr( keystr2 );
+//  addstr( keystr2 );
   free( keystr2 );
 
   for ( int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i )
@@ -356,8 +473,6 @@ bool handle_input()
 
   key_is_undefined_action( first_key, second_key );
   return true;
-  
-  
 }
 
 void editor()
