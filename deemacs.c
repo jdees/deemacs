@@ -52,6 +52,24 @@ void refresh_all();
 
 void refresh_status_bar( const char* extra_info );
 
+// visual length
+int64_t vlen( int64_t y )
+{
+ if ( y >= buf_size || y < 0 )
+   return 0;
+ int64_t res = strlen(buf[y]);
+ if ( res > 0 )
+ {
+   res -= buf[y][res-1]=='\n';
+   if ( res > 0 )
+   {
+     // because windowz files are special snowflakes
+     res -= buf[y][res-1]=='\r';
+   }
+ }
+ return res;
+}
+
 /// >>>> functions begin
 
 static void f_exit()
@@ -60,6 +78,7 @@ static void f_exit()
 }
 
 void write_file();
+void refresh_buffer( int64_t starting_from_line );
 
 static void f_save()
 {
@@ -81,10 +100,42 @@ static void f_forward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur
 static void f_backward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1 ) == 0 ) beep(); }
 static void f_next_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c() ) == 0 ) beep(); }
 static void f_previous_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()-1, cur_buf_c() ) == 0 ) beep(); }
-static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), strlen( buf[cur_buf_r()] ) ) == 0 ) beep(); }
+static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), vlen( cur_buf_r() ) ) == 0 ) beep(); }
 static void f_move_beginning_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0 ) == 0 ) beep(); }
+static void f_recenter()
+{
+  if ( buf_size <= nrows || cur_buf_r() < (nrows / 2) )
+    return;
+  int64_t old_cur_r = cur_r;
+  cur_r = nrows / 2;
+  buf_r = buf_r - cur_r + old_cur_r;
+  refresh_all();
+}
+static void f_page_down()
+{
+  // emacs adds only nrows-2, we add one more. Emacs also only allows at least 3 rows for a buffer.
+  if ( nrows <= 1 )
+    ++buf_r;
+  else
+    buf_r += nrows - 1;
+  if ( buf_r >= buf_size )
+    buf_r = buf_size - 1;
+  if ( cur_buf_r() >= buf_size )
+    cur_r = buf_size - buf_r - 1;
+  refresh_all();
+}
+/*static void f_page_up()
+{
+}*/
+
 
 static void f_keyboard_quit() { refresh_all(); beep(); }
+
+static void f_beginning_of_buffer()
+{
+  cur_c = cur_r = buf_r = buf_c = 0;
+  refresh_all();
+}
 
 /// <<<< functions end
 
@@ -101,6 +152,11 @@ struct Binding bindings[] =
   { KBD_RIGHT, KBD_NOKEY, f_forward_char },
   { KBD_LEFT, KBD_NOKEY, f_backward_char },
 
+  { 'v' | KBD_CTRL, KBD_NOKEY, f_page_down },
+
+  { '<' | KBD_META, KBD_NOKEY, f_beginning_of_buffer },
+
+  { 'l' | KBD_CTRL, KBD_NOKEY, f_recenter },
 
   { 'a' | KBD_CTRL, KBD_NOKEY, f_move_beginning_of_line },
   { 'e' | KBD_CTRL, KBD_NOKEY, f_move_end_of_line },
@@ -191,13 +247,14 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
 {
   if ( y < 0 || y >= buf_size || x < 0 )
     return 0;
-  int64_t len = strlen( buf[ y ] );
+  int64_t len = vlen( y );
   if ( x > len )
     return 0;
 
+  // Where should cursor go on the display? does it still fit into display?
+
   int64_t ydiff = y - buf_r;
   int64_t xdiff = x - buf_c;
-
   if ( ydiff >= 0 && ydiff < nrows && xdiff >= 0 && xdiff < ncols )
   {
     // finished - only move required
@@ -207,9 +264,8 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
     return 1;
   }
 
-  // todo(dees): function is unfinished
+  // cursor does not fit on display - we need to change buf_r/buf_c
 
-  // probably also update of buf_r / buf_c required
   if ( ydiff < 0 )
   {
     // lines fit all into screen
@@ -220,27 +276,21 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
     }
     else
     {
-      int64_t curbr = cur_buf_r();
-      (void)curbr;
-      int64_t pre_buf_r = buf_r;
-      buf_r = buf_r - (nrows+1)/2;
-      if ( buf_r < 0 ) buf_r = 0;
-      cur_r += pre_buf_r-buf_r;
-      assert( cur_buf_r() < buf_size );
+      buf_r = y - nrows/2;
+      if ( buf_r < 0 )
+        buf_r = 0;
+      cur_r = y - buf_r;
     }
   }
   else if ( ydiff >= nrows )
   {
-    // Shouldn't happen, I think. Still handle it, Oo.
-    // todo...
-  }
-  else
-  {
-    buf_r = y;
+    buf_r = y - nrows/2;
+    if ( buf_r < 0 )
+      buf_r = 0;
+    cur_r = y - buf_r;
   }
 
-  // y has moved, recalculate
-  len = strlen( buf[ cur_buf_r() ] );
+  refresh_all();
 
 /*
   if ( xdiff < 0 )
@@ -249,11 +299,7 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
   }
   else if ( xdiff > 
 */
-
-  cur_buf_r();
-  cur_buf_c();
   return 1;
-//  buf_r + cur_r
 }
 
 void open_file()
@@ -275,6 +321,7 @@ void open_file()
     append_to_buf( tmp_ptr );
     tmp_ptr = 0;
   }
+  append_to_buf( "" );
   if ( fclose( f ) != 0 ) err( EX_IOERR, "%s", file_name );
 }
 
@@ -340,21 +387,21 @@ void refresh_status_bar( const char* extra_info )
 void refresh_buffer( int64_t starting_from_line )
 {
   int64_t i = starting_from_line;
-  for ( ; i < nrows && i < buf_size; ++i )
+  for ( ; i < nrows && (i+buf_r) < buf_size; ++i )
   {
     if ( i + buf_r > buf_size )
       break;
-    int64_t slen = strlen(buf[i]);
+    int64_t slen = strlen(buf[buf_r+i]);
     if ( buf_c > slen ) continue;
     if ( slen - buf_c > ncols )
     {
-      char tmp = buf[i][buf_c+ncols];
-      buf[i][buf_c+ncols] = 0;
-      mvaddstr( i, 0, buf[i] );
-      buf[i][buf_c+ncols] = tmp;
+      char tmp = buf[buf_r+i][buf_c+ncols];
+      buf[buf_r+i][buf_c+ncols] = 0;
+      mvaddstr( i, 0, buf[buf_r+i] );
+      buf[buf_r+i][buf_c+ncols] = tmp;
     }
     else
-      mvaddstr( i, 0, buf[i] );
+      mvaddstr( i, 0, buf[buf_r+i] );
     clrtoeol();
   }
   for ( ; i < nrows; ++i )
@@ -362,6 +409,7 @@ void refresh_buffer( int64_t starting_from_line )
     move( i, 0 );
     clrtoeol();
   }
+  move( cur_r, cur_c );
 }
 
 void refresh_all()
@@ -369,7 +417,7 @@ void refresh_all()
   refresh_buffer( 0 );
   refresh_status_bar( 0 );
   move( cur_r, cur_c );
-  // refresh(); not required?
+  refresh();
 }
 
 void init_colors()
@@ -418,7 +466,7 @@ bool handle_input()
 {
   int32_t first_key = deemacs_next_key();
 
-  if ( first_key <= 255 && isalnum( first_key ) )
+  if ( first_key <= 255 && ( isgraph( first_key ) || first_key == ' ' ) )
   {
     f_add_char( first_key, KBD_NOKEY );
     return true;
