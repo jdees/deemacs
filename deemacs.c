@@ -70,6 +70,12 @@ int64_t vlen( int64_t y )
  return res;
 }
 
+// Use REALLOCF for reallocs with a smaller size than the previous alloc.
+// Can be mapped either to "reallocf" or "realloc"
+// where the first guarantues the new size and the latter may also keep the larger
+// size being more efficient but potentially resulting in large unused memory blocks.
+#define REALLOCF realloc
+
 /// >>>> functions begin
 
 static void f_exit()
@@ -128,6 +134,10 @@ static void f_page_down()
 {
 }*/
 
+void f_add_return();
+
+void f_backspace_function();
+void f_delete_function();
 
 static void f_keyboard_quit() { refresh_all(); beep(); }
 
@@ -151,6 +161,10 @@ struct Binding bindings[] =
   { KBD_UP, KBD_NOKEY, f_previous_line },
   { KBD_RIGHT, KBD_NOKEY, f_forward_char },
   { KBD_LEFT, KBD_NOKEY, f_backward_char },
+  { KBD_RET, KBD_NOKEY, f_add_return },
+  { KBD_BS, KBD_NOKEY, f_backspace_function },
+  { KBD_DEL, KBD_NOKEY, f_delete_function },
+  { 'd' | KBD_CTRL, KBD_NOKEY, f_delete_function },
 
   { 'v' | KBD_CTRL, KBD_NOKEY, f_page_down },
 
@@ -230,6 +244,78 @@ void remove_line_from_buf( int64_t line_num )
   }
   --buf_size;
 }
+
+// pos==1 => delete first char in line. pos==0 => delete newline from previous line
+void remove_char_from_buf( int64_t line_num, int64_t pos )
+{
+  int64_t len = strlen( buf[line_num] );
+  assert( pos <= len );
+  if ( pos > 0 )
+  {
+    // ez
+    memmove( buf[line_num] + pos - 1, buf[line_num] + pos, len-pos+1 );
+    buf[line_num] = REALLOCF( buf[line_num], len-1+1 );
+  }
+  else
+  {
+    // collapse two rows
+    if ( line_num == 0 )
+      return;
+    int64_t len2 = strlen( buf[line_num-1] );
+    buf[line_num-1] = realloc( buf[line_num-1], len + len2 ); //< one newline will be removed
+    memcpy( buf[line_num-1] + len2 - 1, buf[line_num], len + 1 );
+    remove_line_from_buf( line_num );
+  }
+}
+
+void f_backspace_function()
+{
+  int64_t c = cur_buf_c();
+  int64_t r = cur_buf_r();
+  if ( c != 0 )
+  {
+    remove_char_from_buf( cur_buf_r(), cur_buf_c() );
+    --cur_c;
+  }
+  else if ( r != 0 )
+  {
+    int64_t pos = strlen( buf[r-1] );
+    remove_char_from_buf( cur_buf_r(), cur_buf_c() );
+    --cur_r;
+    cur_c = pos - 1; //< -1 cause of newline
+  }
+  else
+  {
+    beep();
+    return;
+  }
+  refresh_all();
+}
+
+void f_delete_function()
+{
+  int64_t c = cur_buf_c();
+  int64_t r = cur_buf_r();
+  int64_t len = strlen( buf[r] );
+  if ( c < len-1 )
+  {
+    ++cur_c;
+    f_backspace_function();
+  }
+  else if ( r + 1 < buf_size )
+  {
+    cur_c = 0;
+    ++cur_r;
+    f_backspace_function();
+  }
+  else
+  {
+    beep();
+    return;
+  }
+  refresh_all();
+}
+
 void add_char_to_buf( char c, int64_t line_num, int64_t pos )
 {
   int64_t len = strlen( buf[line_num] );
@@ -237,11 +323,21 @@ void add_char_to_buf( char c, int64_t line_num, int64_t pos )
   memmove( buf[line_num] + pos +1, buf[line_num] + pos, len-pos+1 );
   buf[line_num][pos]=c;
 }
-void remove_char_from_buf( int64_t line_num, int64_t pos )
+
+void add_newline_to_buf( int64_t line_num, int64_t pos )
 {
-  int64_t len = strlen( buf[line_num] );
-  memmove( buf[line_num]+pos, buf[line_num]+pos+1, (len - pos - 1 + 1 ) );
+  char* line = buf[line_num];
+  int64_t len = strlen( line );
+  char* second = malloc( len - pos + 1 );
+  memcpy( second, line+pos, len - pos + 1 );
+  char* first = REALLOCF( buf[line_num], pos + 2 );
+  *(first+pos) = '\n';
+  *(first+pos+1) = 0;
+  buf[line_num] = first;
+  add_to_buf( first, line_num );
+  buf[line_num+1] = second;
 }
+
 
 int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
 {
@@ -459,6 +555,15 @@ void f_add_char( int32_t c, int32_t no_key )
   assert( no_key == KBD_NOKEY );
   add_char_to_buf( c, cur_buf_r(), cur_buf_c() );
   ++cur_c;
+  refresh_all();
+}
+
+
+void f_add_return()
+{
+  add_newline_to_buf( cur_buf_r(), cur_buf_c() );
+  ++cur_r;
+  cur_c = 0;
   refresh_all();
 }
 
