@@ -70,11 +70,16 @@ int64_t vlen( int64_t y )
  return res;
 }
 
+
+// >>> options begin
+
 // Use REALLOCF for reallocs with a smaller size than the previous alloc.
 // Can be mapped either to "reallocf" or "realloc"
 // where the first guarantues the new size and the latter may also keep the larger
 // size being more efficient but potentially resulting in large unused memory blocks.
 #define REALLOCF realloc
+
+int option_show_newlines = 0;
 
 /// >>>> functions begin
 
@@ -147,6 +152,17 @@ static void f_beginning_of_buffer()
   refresh_all();
 }
 
+static void f_option_show_newlines()
+{
+  option_show_newlines = ! option_show_newlines;
+  const char* msgon = "set show_newlines to on";
+  const char* msgoff = "set show_newlines to off";
+  refresh_all();
+  refresh_status_bar( option_show_newlines ? msgon : msgoff );
+}
+
+static void f_revert_buffer();
+
 /// <<<< functions end
 
 
@@ -174,6 +190,10 @@ struct Binding bindings[] =
 
   { 'a' | KBD_CTRL, KBD_NOKEY, f_move_beginning_of_line },
   { 'e' | KBD_CTRL, KBD_NOKEY, f_move_end_of_line },
+
+  { 'o' | KBD_META, 'n', f_option_show_newlines },
+
+  { 'u' | KBD_CTRL | KBD_META, KBD_NOKEY, f_revert_buffer }, //< this is bound to SUPER-u in emacs
 
   { 'x' | KBD_CTRL, 'c' | KBD_CTRL, f_exit },
   { 'x' | KBD_CTRL, 's' | KBD_CTRL, f_save },
@@ -244,6 +264,29 @@ void remove_line_from_buf( int64_t line_num )
   }
   --buf_size;
 }
+
+void free_buffer()
+{
+  for ( int64_t i = 0; i < buf_size; ++i )
+    free( buf[i] );
+  free( buf );
+  buf_size = 0;
+  buf_cap = 0;
+  buf_r = 0;
+  buf_c = 0;
+  cur_r = 0;
+  cur_c = 0;
+}
+
+void open_file();
+
+static void f_revert_buffer()
+{
+  free_buffer();
+  open_file();
+  refresh_all();
+}
+
 
 // pos==1 => delete first char in line. pos==0 => delete newline from previous line
 void remove_char_from_buf( int64_t line_num, int64_t pos )
@@ -497,7 +540,15 @@ void refresh_buffer( int64_t starting_from_line )
       buf[buf_r+i][buf_c+ncols] = tmp;
     }
     else
+    {
       mvaddstr( i, 0, buf[buf_r+i] );
+      if ( option_show_newlines )
+      {
+        if ( has_color ) attron(COLOR_PAIR(3));
+        mvaddstr( i, slen-1, " " );
+        if ( has_color ) attroff(COLOR_PAIR(3));
+      }
+    }
     clrtoeol();
   }
   for ( ; i < nrows; ++i )
@@ -524,6 +575,8 @@ void init_colors()
   start_color();
   init_pair(1, COLOR_RED, COLOR_BLACK);
   init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+  // 8 is grey
+  init_pair(3, COLOR_WHITE, 8);
 }
 
 
