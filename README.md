@@ -16,7 +16,11 @@ Getting started
 ---------------
 
 Run ```deemacs myfile.txt``` to start the editor and load the file into the editor.
-Available keyboard commands can be found in the file deemacs.c under ``struct Binding bindings[]``.
 
-Exiting: CTRL+X CTRL+C
-Save: CTRL+X CTRL+S
+Available keyboard commands can be found in the struct ``struct Binding bindings`` in file ```deemacs.c```.
+
+Some important keybindings:
+
+* Stop current command: ```CTRL+G```
+* Save: ```CTRL+X CTRL+S```
+* Exiting: ```CTRL+X CTRL+C```
