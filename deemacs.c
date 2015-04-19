@@ -91,7 +91,7 @@ static void f_exit()
 
 void write_file();
 void refresh_buffer( int64_t starting_from_line );
-void add_special_buffer_message( int64_t pos, const char* line );
+void add_special_buffer_message( int64_t y, int64_t x, const char* line );
 
 static void f_save()
 {
@@ -374,7 +374,7 @@ static void f_show_keybindings()
 
     strcat( to_print, tmp->description );
 
-    add_special_buffer_message(i, to_print);
+    add_special_buffer_message(i, 0, to_print);
   }
 
 }
@@ -577,12 +577,12 @@ int main( int argn, char** argv )
   return 0;
 }
 
-void add_special_buffer_message( int64_t pos, const char* line )
+void add_special_buffer_message( int64_t y, int64_t x, const char* line )
 {
   if ( has_color ) attron(COLOR_PAIR(2));
   attron(A_STANDOUT);
-  if ( pos <= nrows )
-    mvaddstr( pos, 0, line );
+  if ( y <= nrows )
+    mvaddstr( y, x, line );
   attroff(A_STANDOUT);
   if ( has_color ) attroff(COLOR_PAIR(2));
 }
@@ -817,7 +817,11 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
 
   int match_next = 0;
 
+  const char status_msg_failing[] = "Failing search: ";
+  const char status_msg_wrapped[] = "Wrapped search: ";
   const char status_msg_prefix[] = "search: ";
+  // keep up-to date with the 3 msgs
+  int status_prefix_max_len = strlen( status_msg_wrapped );
 
   refresh_status_bar( status_msg_prefix );
 
@@ -873,6 +877,7 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
     int64_t cspos = c;
     int64_t crpos = r;
     bool has_wrapped = 0;
+    bool has_matched = 0;
     for ( int nmatch = 0; nmatch <= match_next; ++nmatch )
     {
       int64_t rmatch;
@@ -890,7 +895,10 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
       }
       else if ( is_found && nmatch == match_next ) //< bingo
       {
-        try_move_cursor_to_buf_pos( rmatch, cmatch );
+        try_move_cursor_to_buf_pos( rmatch, cmatch + strlen(needle) );
+        cspos = cmatch;
+        crpos = rmatch;
+        has_matched = 1;
       }
       else
       {
@@ -901,11 +909,24 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
       }
     }
 
-    char* status_msg = malloc(strlen(needle)+strlen(status_msg_prefix)+1);
-    strcpy( status_msg, status_msg_prefix );
+    char* status_msg = malloc(strlen(needle)+status_prefix_max_len+1);
+    status_msg[0] = 0;
+    if ( ! has_matched )
+      strcat( status_msg, status_msg_failing );
+    else if ( has_wrapped )
+      strcat( status_msg, status_msg_wrapped );
+    else
+      strcat( status_msg, status_msg_prefix );
     strcat( status_msg, needle );
     refresh_status_bar( status_msg );
     free(status_msg);
+
+    // highlite match
+    if (has_matched)
+    {
+      add_special_buffer_message(crpos-buf_r,cspos-buf_c,needle);
+    }
+
   }
 
 }
