@@ -20,7 +20,7 @@ bool has_color;
 
 // buffer content
 char** buf;
-int64_t buf_size;
+int64_t buf_sz;
 int64_t buf_cap;
 
 // buffer position top left
@@ -55,7 +55,7 @@ void refresh_status_bar( const char* extra_info );
 // visual length
 int64_t vlen( int64_t y )
 {
- if ( y >= buf_size || y < 0 )
+ if ( y >= buf_sz || y < 0 )
    return 0;
  int64_t res = strlen(buf[y]);
  if ( res > 0 )
@@ -115,7 +115,7 @@ static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(),
 static void f_move_beginning_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0 ) == 0 ) beep(); }
 static void f_recenter()
 {
-  if ( buf_size <= nrows || cur_buf_r() < (nrows / 2) )
+  if ( buf_sz <= nrows || cur_buf_r() < (nrows / 2) )
     return;
   int64_t old_cur_r = cur_r;
   cur_r = nrows / 2;
@@ -129,10 +129,10 @@ static void f_page_down()
     ++buf_r;
   else
     buf_r += nrows - 1;
-  if ( buf_r >= buf_size )
-    buf_r = buf_size - 1;
-  if ( cur_buf_r() >= buf_size )
-    cur_r = buf_size - buf_r - 1;
+  if ( buf_r >= buf_sz )
+    buf_r = buf_sz - 1;
+  if ( cur_buf_r() >= buf_sz )
+    cur_r = buf_sz - buf_r - 1;
   refresh_all();
 }
 /*static void f_page_up()
@@ -224,7 +224,7 @@ void write_file()
 {
   f = fopen( file_name, "w+" );
   if ( ! f ) err( EX_IOERR, "%s", file_name );
-  for ( int64_t i = 0; i < buf_size; ++i )
+  for ( int64_t i = 0; i < buf_sz; ++i )
   {
     int64_t num_chars = strlen(buf[i]);
     if ( fwrite( buf[i], 1, num_chars, f ) < num_chars )
@@ -236,41 +236,41 @@ void write_file()
 //// buffer modification functions
 void add_to_buf( char* s, int64_t line_num )
 {
-  if ( buf_size == buf_cap )
+  if ( buf_sz == buf_cap )
   {
     buf_cap = vec_next_size( buf_cap );
     buf = realloc( buf, buf_cap*sizeof(void*) );
     if ( ! buf ) err( EX_OSERR, "" );
   }
   // capacity is good enough
-  if ( line_num + 1 < buf_size )
+  if ( line_num + 1 < buf_sz )
   {
     // shift
-    memmove( buf + line_num + 1, buf + line_num, (buf_size - line_num)*sizeof(void*) );
+    memmove( buf + line_num + 1, buf + line_num, (buf_sz - line_num)*sizeof(void*) );
   }
-  ++buf_size;
+  ++buf_sz;
   buf[ line_num ] = s;
 }
 void append_to_buf( char* s )
 {
-  add_to_buf( s, buf_size );
+  add_to_buf( s, buf_sz );
 }
 void remove_line_from_buf( int64_t line_num )
 {
   free( buf[line_num] );
-  if ( line_num + 1 < buf_size )
+  if ( line_num + 1 < buf_sz )
   {
-    memmove( buf + line_num, buf + line_num + 1, (buf_size - line_num - 1)*sizeof(void*) );
+    memmove( buf + line_num, buf + line_num + 1, (buf_sz - line_num - 1)*sizeof(void*) );
   }
-  --buf_size;
+  --buf_sz;
 }
 
 void free_buffer()
 {
-  for ( int64_t i = 0; i < buf_size; ++i )
+  for ( int64_t i = 0; i < buf_sz; ++i )
     free( buf[i] );
   free( buf );
-  buf_size = 0;
+  buf_sz = 0;
   buf_cap = 0;
   buf_r = 0;
   buf_c = 0;
@@ -345,7 +345,7 @@ void f_delete_function()
     ++cur_c;
     f_backspace_function();
   }
-  else if ( r + 1 < buf_size )
+  else if ( r + 1 < buf_sz )
   {
     cur_c = 0;
     ++cur_r;
@@ -384,7 +384,7 @@ void add_newline_to_buf( int64_t line_num, int64_t pos )
 
 int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
 {
-  if ( y < 0 || y >= buf_size || x < 0 )
+  if ( y < 0 || y >= buf_sz || x < 0 )
     return 0;
   int64_t len = vlen( y );
   if ( x > len )
@@ -408,7 +408,7 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
   if ( ydiff < 0 )
   {
     // lines fit all into screen
-    if ( nrows >= buf_size )
+    if ( nrows >= buf_sz )
     {
       buf_r = 0;
       cur_r = 0;
@@ -446,7 +446,7 @@ void open_file()
   f = fopen( file_name, "r+" );
   if ( ! f ) err( EX_NOINPUT, "%s", file_name );
   buf = realloc( buf, sizeof(char*) * INIT_VEC_SIZE );
-  buf_size = 0;
+  buf_sz = 0;
   buf_cap = INIT_VEC_SIZE;
   char * tmp_ptr = 0;
   size_t lcap = 0;
@@ -466,7 +466,7 @@ void open_file()
 
 void debug_print_buf()
 {
-  for ( int i =0; i<buf_size; ++i )
+  for ( int i =0; i<buf_sz; ++i )
     fwrite( buf[i], 1, strlen(buf[i]), stdout );
 }
 
@@ -503,7 +503,7 @@ void refresh_status_bar( const char* extra_info )
   attroff(A_BOLD);
   if ( has_color ) attroff(COLOR_PAIR(1));
 
-  printw( "    %d%%  (%d/%d,%d/%d)", (buf_r)*100/buf_size, cur_buf_r()+1, buf_size, cur_buf_c(), strlen(buf[cur_buf_r()]) );
+  printw( "    %d%%  (%d/%d,%d/%d)", (buf_r)*100/buf_sz, cur_buf_r()+1, buf_sz, cur_buf_c(), strlen(buf[cur_buf_r()]) );
 
   clrtoeol();
 
@@ -526,9 +526,9 @@ void refresh_status_bar( const char* extra_info )
 void refresh_buffer( int64_t starting_from_line )
 {
   int64_t i = starting_from_line;
-  for ( ; i < nrows && (i+buf_r) < buf_size; ++i )
+  for ( ; i < nrows && (i+buf_r) < buf_sz; ++i )
   {
-    if ( i + buf_r > buf_size )
+    if ( i + buf_r > buf_sz )
       break;
     int64_t slen = strlen(buf[buf_r+i]);
     if ( buf_c > slen ) continue;
