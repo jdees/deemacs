@@ -1,4 +1,5 @@
-LDFLAGS+=-lcurses
+CC=gcc
+LDFLAGS+=-lcurses -lc -lerr
 CFLAGS+=-std=c11 -Wall -g
 
 all: deemacs
