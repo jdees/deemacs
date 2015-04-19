@@ -109,6 +109,9 @@ static void f_save()
 
 int try_move_cursor_to_buf_pos( int64_t y, int64_t x );
 
+
+static void f_isearch_forward();
+
 static void f_forward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()+1 ) == 0 ) beep(); }
 static void f_backward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1 ) == 0 ) beep(); }
 static void f_next_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c() ) == 0 ) beep(); }
@@ -203,6 +206,8 @@ struct Binding bindings[] =
 
   { 'x' | KBD_CTRL, 'c' | KBD_CTRL, f_exit, "exit" },
   { 'x' | KBD_CTRL, 's' | KBD_CTRL, f_save, "save buffer to file" },
+
+  { 's' | KBD_CTRL, KBD_NOKEY, f_isearch_forward, "search forward" },
 
   { 'g' | KBD_CTRL, KBD_NOKEY, f_keyboard_quit, "exit command" },
 
@@ -769,6 +774,148 @@ bool handle_input()
   key_is_undefined_action( first_key, second_key );
   return true;
 }
+
+static bool find_next_in_buffer( int64_t r, int64_t c, int64_t* r2, int64_t* c2, const char* needle )
+{
+  // contains upper
+  bool has_upper = false;
+  for ( int i = 0; i < strlen(needle); ++i )
+    if ( isupper( needle[i] ) )
+      has_upper = true;
+
+  char* match = has_upper ? strcasestr( buf[r]+c, needle ) : strstr( buf[r]+c, needle );
+  if ( match != 0 )
+  {
+    *r2=r;
+    *c2=match-buf[r];
+    return true;
+  }
+
+  for ( int64_t cr=r+1;cr<buf_sz;++cr )
+  {
+    char* match = has_upper ? strcasestr( buf[cr], needle ) : strstr( buf[cr], needle );
+    if ( match != 0 )
+    {
+      *r2=cr;
+      *c2=match-buf[cr];
+      return true;
+    }
+  }
+
+  return false;
+}
+
+
+static void isearch( bool backward /* todo(dees): backword is not working, fix */ )
+{
+  int64_t c = cur_buf_c();
+  int64_t r = cur_buf_r();
+
+  char* needle = malloc(32);
+  int needle_cap = 32;
+  needle[0] = 0;
+
+  int match_next = 0;
+
+  const char status_msg_prefix[] = "search: ";
+
+  refresh_status_bar( status_msg_prefix );
+
+  while ( 1 )
+  {
+    int32_t first_key = deemacs_next_key();
+
+    // out
+    if ( first_key == (KBD_CTRL | 'g') )
+    {
+      if ( cur_buf_c() != c || cur_buf_r() != r )
+        try_move_cursor_to_buf_pos( r, c );
+      free(needle);
+      return;
+    }
+    // delete one char
+    else if ( first_key == KBD_BS )
+    {
+      if ( match_next > 0 )
+        --match_next;
+      else if ( strlen( needle ) > 0 )
+        needle[ strlen(needle) - 1 ] = 0;
+      else
+        beep();
+    }
+    // next match
+    else if ( first_key == ('s' | KBD_CTRL) )
+      ++match_next;
+    // finish search
+    else if ( first_key == KBD_RET )
+    {
+      free(needle);
+      return;
+    }
+    // add character to search pattern
+    else if ( first_key <= 255 && ( isgraph( first_key ) || first_key == ' ' ) )
+    {
+      int nlen = strlen(needle);
+      if ( nlen+1 >= needle_cap )
+      {
+        needle = REALLOCF( needle, needle_cap*2 );
+        needle_cap *= 2;
+      }
+      needle[ nlen ] = first_key;
+      needle[ nlen + 1 ] = 0;
+    }
+    else
+    {
+      key_is_undefined_action( first_key, KBD_NOKEY );
+      continue;
+    }
+
+    int64_t cspos = c;
+    int64_t crpos = r;
+    bool has_wrapped = 0;
+    for ( int nmatch = 0; nmatch <= match_next; ++nmatch )
+    {
+      int64_t rmatch;
+      int64_t cmatch;
+      bool is_found = find_next_in_buffer( crpos, cspos, &rmatch, &cmatch, needle );
+      if ( ! is_found && has_wrapped && crpos == 0 && cspos == 0 )
+      {
+        beep();
+      }
+      else if ( ! is_found )
+      {
+        has_wrapped = 1;
+        cspos = 0;
+        crpos = 0;
+      }
+      else if ( is_found && nmatch == match_next ) //< bingo
+      {
+        try_move_cursor_to_buf_pos( rmatch, cmatch );
+      }
+      else
+      {
+        assert( is_found );
+        assert( nmatch != match_next );
+        cspos = cmatch+1;
+        crpos = rmatch;
+      }
+    }
+
+    char* status_msg = malloc(strlen(needle)+strlen(status_msg_prefix)+1);
+    strcpy( status_msg, status_msg_prefix );
+    strcat( status_msg, needle );
+    refresh_status_bar( status_msg );
+    free(status_msg);
+  }
+
+}
+
+
+static void f_isearch_forward()
+{
+  isearch( false );
+}
+
 
 void editor()
 {
