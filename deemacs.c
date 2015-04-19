@@ -172,6 +172,8 @@ static void f_show_keybindings();
 
 static void f_kill_line();
 
+static void f_go_to_line();
+
 /// <<<< functions end
 
 
@@ -210,6 +212,9 @@ struct Binding bindings[] =
   { 's' | KBD_CTRL, KBD_NOKEY, f_isearch_forward, "search forward" },
 
   { 'g' | KBD_CTRL, KBD_NOKEY, f_keyboard_quit, "exit command" },
+
+  { 'g' | KBD_META, 'g', f_go_to_line, "go to line [arg]" },
+  { 'g' | KBD_META, 'g' | KBD_META, f_go_to_line, "go to line [arg]" },
 
   { 'k' | KBD_CTRL, KBD_NOKEY, f_kill_line, "delete until end of line" },
 
@@ -805,6 +810,70 @@ static bool find_next_in_buffer( int64_t r, int64_t c, int64_t* r2, int64_t* c2,
   return false;
 }
 
+// return value must be freed, can be nullptr on error
+char* get_input_line( const char* prefix )
+{
+  char* input = malloc(32);
+  int input_cap = 32;
+
+  refresh_status_bar( prefix );
+
+  while ( 1 )
+  {
+    int32_t key = deemacs_next_key();
+
+    if ( key == (KBD_CTRL | 'g') )
+    {
+      free(input);
+      return 0;
+    }
+    // delete one char
+    else if ( key == KBD_BS )
+    {
+      if ( strlen( input ) > 0 )
+        input[ strlen(input) - 1 ] = 0;
+      else
+        beep();
+    }
+    // finish search
+    else if ( key == KBD_RET )
+    {
+      return input;
+    }
+    // add character to search pattern
+    else if ( key <= 255 && ( isgraph( key ) || key == ' ' ) )
+    {
+      int nlen = strlen(input);
+      if ( nlen+1 >= input_cap )
+      {
+        input = REALLOCF( input, input_cap*2 );
+        input_cap *= 2;
+      }
+      input[ nlen ] = key;
+      input[ nlen + 1 ] = 0;
+    }
+    else
+    {
+      key_is_undefined_action( key, KBD_NOKEY );
+      continue;
+    }
+    char* statusmsg = malloc( strlen(input)+strlen(prefix)+1 );
+    strcpy( statusmsg, prefix );
+    strcat( statusmsg, input );
+    refresh_status_bar( statusmsg );
+  }
+  
+}
+
+static void f_go_to_line()
+{
+  char* arg = get_input_line( "Goto line: " );
+  if (arg==0)
+    return;
+  int64_t line = atoll( arg );
+  try_move_cursor_to_buf_pos( line-1, 0 );
+}
+
 
 static void isearch( bool backward /* todo(dees): backword is not working, fix */ )
 {
@@ -930,7 +999,6 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
   }
 
 }
-
 
 static void f_isearch_forward()
 {
