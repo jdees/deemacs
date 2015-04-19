@@ -46,6 +46,7 @@ struct Binding
   int first;
   int second;
   function_t func;
+  const char* description;
 };
 
 void refresh_all();
@@ -90,6 +91,7 @@ static void f_exit()
 
 void write_file();
 void refresh_buffer( int64_t starting_from_line );
+void add_special_buffer_message( int64_t pos, const char* line );
 
 static void f_save()
 {
@@ -139,10 +141,10 @@ static void f_page_down()
 {
 }*/
 
-void f_add_return();
+static void f_add_return();
 
-void f_backspace_function();
-void f_delete_function();
+static void f_backspace_function();
+static void f_delete_function();
 
 static void f_keyboard_quit() { refresh_all(); beep(); }
 
@@ -163,42 +165,51 @@ static void f_option_show_newlines()
 
 static void f_revert_buffer();
 
+static void f_show_keybindings();
+
+static void f_kill_line();
+
 /// <<<< functions end
 
 
 struct Binding bindings[] =
 {
 // movement
-  { 'n' | KBD_CTRL, KBD_NOKEY, f_next_line },
-  { 'p' | KBD_CTRL, KBD_NOKEY, f_previous_line },
-  { 'f' | KBD_CTRL, KBD_NOKEY, f_forward_char },
-  { 'b' | KBD_CTRL, KBD_NOKEY, f_backward_char },
-  { KBD_DOWN, KBD_NOKEY, f_next_line },
-  { KBD_UP, KBD_NOKEY, f_previous_line },
-  { KBD_RIGHT, KBD_NOKEY, f_forward_char },
-  { KBD_LEFT, KBD_NOKEY, f_backward_char },
-  { KBD_RET, KBD_NOKEY, f_add_return },
-  { KBD_BS, KBD_NOKEY, f_backspace_function },
-  { KBD_DEL, KBD_NOKEY, f_delete_function },
-  { 'd' | KBD_CTRL, KBD_NOKEY, f_delete_function },
+  { 'n' | KBD_CTRL, KBD_NOKEY, f_next_line, "next line" },
+  { 'p' | KBD_CTRL, KBD_NOKEY, f_previous_line, "previous line" },
+  { 'f' | KBD_CTRL, KBD_NOKEY, f_forward_char, "one character forward" },
+  { 'b' | KBD_CTRL, KBD_NOKEY, f_backward_char, "one character backward" },
+  { KBD_DOWN, KBD_NOKEY, f_next_line, "next line" },
+  { KBD_UP, KBD_NOKEY, f_previous_line, "previous line" },
+  { KBD_RIGHT, KBD_NOKEY, f_forward_char, "one character forward" },
+  { KBD_LEFT, KBD_NOKEY, f_backward_char, "one character backward" },
+  { KBD_RET, KBD_NOKEY, f_add_return, "insert return" },
+  { KBD_BS, KBD_NOKEY, f_backspace_function, "backspace" },
+  { KBD_DEL, KBD_NOKEY, f_delete_function, "delete one character" },
+  { 'd' | KBD_CTRL, KBD_NOKEY, f_delete_function, "delete one character" },
 
-  { 'v' | KBD_CTRL, KBD_NOKEY, f_page_down },
+  { 'v' | KBD_CTRL, KBD_NOKEY, f_page_down, "move one page down" },
 
-  { '<' | KBD_META, KBD_NOKEY, f_beginning_of_buffer },
+  { '<' | KBD_META, KBD_NOKEY, f_beginning_of_buffer, "move to beginning of buffer" },
 
-  { 'l' | KBD_CTRL, KBD_NOKEY, f_recenter },
+  { 'l' | KBD_CTRL, KBD_NOKEY, f_recenter, "center cursor" },
 
-  { 'a' | KBD_CTRL, KBD_NOKEY, f_move_beginning_of_line },
-  { 'e' | KBD_CTRL, KBD_NOKEY, f_move_end_of_line },
+  { 'a' | KBD_CTRL, KBD_NOKEY, f_move_beginning_of_line, "move to beginning of line" },
+  { 'e' | KBD_CTRL, KBD_NOKEY, f_move_end_of_line, "move to end of line" },
 
-  { 'o' | KBD_META, 'n', f_option_show_newlines },
+  { 'o' | KBD_META, 'n', f_option_show_newlines, "option on/off: show newlines" },
 
-  { 'u' | KBD_CTRL | KBD_META, KBD_NOKEY, f_revert_buffer }, //< this is bound to SUPER-u in emacs
+  { 'u' | KBD_CTRL | KBD_META, KBD_NOKEY, f_revert_buffer, "revert buffer" }, //< this is bound to SUPER-u in emacs
 
-  { 'x' | KBD_CTRL, 'c' | KBD_CTRL, f_exit },
-  { 'x' | KBD_CTRL, 's' | KBD_CTRL, f_save },
+  { 'x' | KBD_CTRL, 'c' | KBD_CTRL, f_exit, "exit" },
+  { 'x' | KBD_CTRL, 's' | KBD_CTRL, f_save, "save buffer to file" },
 
-  { 'g' | KBD_CTRL, KBD_NOKEY, f_keyboard_quit },
+  { 'g' | KBD_CTRL, KBD_NOKEY, f_keyboard_quit, "exit command" },
+
+  { 'k' | KBD_CTRL, KBD_NOKEY, f_kill_line, "delete until end of line" },
+
+  { 'h' | KBD_CTRL, 'b', f_show_keybindings, "show keybindings" }, //< KBD_CTRL+h is often translated as backspace in terminal
+  { '?' | KBD_META, KBD_NOKEY, f_show_keybindings, "show keybindings" }
 }
 ;
 
@@ -278,12 +289,12 @@ void free_buffer()
   cur_c = 0;
 }
 
-void open_file();
+void open_file( bool create_if_not_exists );
 
 static void f_revert_buffer()
 {
   free_buffer();
-  open_file();
+  open_file( 0 );
   refresh_all();
 }
 
@@ -309,6 +320,58 @@ void remove_char_from_buf( int64_t line_num, int64_t pos )
     memcpy( buf[line_num-1] + len2 - 1, buf[line_num], len + 1 );
     remove_line_from_buf( line_num );
   }
+}
+
+static void f_kill_line()
+{
+  int64_t c = cur_buf_c();
+  int64_t r = cur_buf_r();
+  int64_t len = strlen( buf[r] );
+
+  if ( c+1 == len )
+  {
+    f_delete_function();
+    return;
+  }
+  buf[r][c]='\n';
+  buf[r][c+1]=0;
+  refresh_all();
+}
+
+static void f_show_keybindings()
+{
+  for ( int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i )
+  {
+    struct Binding* tmp = &bindings[i];
+    int32_t first_key = tmp->first;
+    int32_t second_key = tmp->second;
+
+    char to_print[256];
+    to_print[0] = 0;
+    char* tmp1 = deemacs_key_to_str_representation( first_key );
+    strcat( to_print, tmp1 );
+    free(tmp1);
+
+    if ( second_key != KBD_NOKEY )
+    {
+      char* tmp = deemacs_key_to_str_representation( second_key );
+      strcat( to_print, " ");
+      strcat( to_print, tmp);
+      free( tmp );
+    }
+
+    int left_col_start = 24;
+    for (int i=strlen(to_print); i<left_col_start; ++i )
+    {
+      to_print[i]=' ';
+      to_print[i+1]=0;
+    }
+
+    strcat( to_print, tmp->description );
+
+    add_special_buffer_message(i, to_print);
+  }
+
 }
 
 void f_backspace_function()
@@ -441,9 +504,15 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
   return 1;
 }
 
-void open_file()
+void open_file( bool create_if_not_exists )
 {
   f = fopen( file_name, "r+" );
+  // try create
+  if ( ! f && create_if_not_exists )
+  {
+    errno = 0;
+    f = fopen( file_name, "w+" );
+  }
   if ( ! f ) err( EX_NOINPUT, "%s", file_name );
   buf = realloc( buf, sizeof(char*) * INIT_VEC_SIZE );
   buf_sz = 0;
@@ -460,7 +529,9 @@ void open_file()
     append_to_buf( tmp_ptr );
     tmp_ptr = 0;
   }
-  append_to_buf( "" );
+  tmp_ptr = malloc(1);
+  tmp_ptr[0] = 0;
+  append_to_buf( tmp_ptr );
   if ( fclose( f ) != 0 ) err( EX_IOERR, "%s", file_name );
 }
 
@@ -476,13 +547,21 @@ int main( int argn, char** argv )
 {
   setlocale(LC_ALL, "");
   err_set_exit( cleanup );
+  bool create_if_not_exists = 0;
+
+  if ( argn == 3 && strcmp( argv[1], "-c" ) == 0 )
+  {
+    create_if_not_exists = 1;
+    argn = 2;
+    argv[1] = argv[2];
+  }
   if ( argn != 2 )
   {
-    errx( EX_USAGE, "%s","usage: deemacs [file]" );
+    errx( EX_USAGE, "%s","usage: deemacs [-c] [file]" );
   }
   file_name = argv[1];
 
-  open_file();
+  open_file( create_if_not_exists );
 
   atexit( cleanup_at_exit );
 
@@ -491,6 +570,16 @@ int main( int argn, char** argv )
   endwin();
   cleanup(0);
   return 0;
+}
+
+void add_special_buffer_message( int64_t pos, const char* line )
+{
+  if ( has_color ) attron(COLOR_PAIR(2));
+  attron(A_STANDOUT);
+  if ( pos <= nrows )
+    mvaddstr( pos, 0, line );
+  attroff(A_STANDOUT);
+  if ( has_color ) attroff(COLOR_PAIR(2));
 }
 
 void refresh_status_bar( const char* extra_info )
