@@ -556,7 +556,9 @@ void editor();
 int main( int argn, char** argv )
 {
   setlocale(LC_ALL, "");
+#ifdef __APPLE__
   err_set_exit( cleanup );
+#endif
   bool create_if_not_exists = 0;
 
   if ( argn == 3 && strcmp( argv[1], "-c" ) == 0 )
