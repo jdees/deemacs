@@ -24,3 +24,4 @@ Some important keybindings:
 * Stop current command: ```CTRL+G```
 * Save: ```CTRL+X CTRL+S```
 * Exiting: ```CTRL+X CTRL+C```
+* Show Keybindings: ```CTRL+H B```
