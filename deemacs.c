@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <unistd.h>
 
 #include "input.h"
 
@@ -28,6 +29,9 @@ int64_t buf_r, buf_c;
 
 // cursor position in editor buffer
 int cur_r,cur_c;
+
+// column position tries to go to further to this column if possible, 0 means no wanderlust
+int cur_buf_c_wanderlust;
 
 // cursor position in buffer content
 int64_t cur_buf_r() { return buf_r + cur_r; }
@@ -138,11 +142,42 @@ static void f_page_down()
     buf_r = buf_sz - 1;
   if ( cur_buf_r() >= buf_sz )
     cur_r = buf_sz - buf_r - 1;
+  int64_t x_max_possible = vlen( cur_buf_r() );
+  int64_t x = cur_buf_c();
+  if ( cur_buf_c_wanderlust > x )
+    x = cur_buf_c_wanderlust;
+  if ( x > x_max_possible )
+  {
+    try_move_cursor_to_buf_pos( cur_buf_r(), x_max_possible );
+    cur_buf_c_wanderlust = x;
+  }
   refresh_all();
 }
-/*static void f_page_up()
+static void f_page_up()
 {
-}*/
+//  TODO
+  exit(-1);
+
+  // emacs adds only nrows-2, we add one more. Emacs also only allows at least 3 rows for a buffer.
+  if ( nrows <= 1 )
+    ++buf_r;
+  else
+    buf_r += nrows - 1;
+  if ( buf_r >= buf_sz )
+    buf_r = buf_sz - 1;
+  if ( cur_buf_r() >= buf_sz )
+    cur_r = buf_sz - buf_r - 1;
+  int64_t x_max_possible = vlen( cur_buf_r() );
+  int64_t x = cur_buf_c();
+  if ( cur_buf_c_wanderlust > x )
+    x = cur_buf_c_wanderlust;
+  if ( x > x_max_possible )
+  {
+    try_move_cursor_to_buf_pos( cur_buf_r(), x_max_possible );
+    cur_buf_c_wanderlust = x;
+  }
+  refresh_all();
+}
 
 static void f_add_return();
 
@@ -194,6 +229,7 @@ struct Binding bindings[] =
   { 'd' | KBD_CTRL, KBD_NOKEY, f_delete_function, "delete one character" },
 
   { 'v' | KBD_CTRL, KBD_NOKEY, f_page_down, "move one page down" },
+  { 'v' | KBD_META, KBD_NOKEY, f_page_up, "move one page up" },
 
   { '<' | KBD_META, KBD_NOKEY, f_beginning_of_buffer, "move to beginning of buffer" },
 
@@ -560,6 +596,18 @@ int main( int argn, char** argv )
   err_set_exit( cleanup );
 #endif
   bool create_if_not_exists = 0;
+
+  int c;
+  while ((c = getopt(argn, argv, "c"))
+  {
+    switch (c)
+    {
+    case 'c':
+    default:
+      lol;
+    }
+  }
+
 
   if ( argn == 3 && strcmp( argv[1], "-c" ) == 0 )
   {

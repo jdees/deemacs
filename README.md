@@ -21,7 +21,28 @@ Available keyboard commands can be found in the struct ``struct Binding bindings
 
 Some important keybindings:
 
-* Stop current command: ```CTRL+G```
-* Save: ```CTRL+X CTRL+S```
-* Exiting: ```CTRL+X CTRL+C```
-* Show Keybindings: ```CTRL+H B```
+  * Stop current command: ```CTRL+G```
+  * Save: ```CTRL+X CTRL+S```
+  * Exit: ```CTRL+X CTRL+C```
+  * Show Keybindings: ```CTRL+H B```
+
+Coding Standards
+----------------
+
+Follow GNU coding starndard.
+It includes using
+
+  * guile
+  * perror
+  * TMPDIR with fallback to /tmp
+  * error msg variants:
+    SOURCE-FILE-NAME:LINENO: MESSAGE
+    SOURCE-FILE-NAME:LINENO:COLUMN: MESSAGE
+    SOURCE-FILE-NAME:LINENO.COLUMN: MESSAGE
+    SOURCE-FILE-NAME:LINENO-1.COLUMN-1-LINENO-2.COLUMN-2: MESSAGE
+    SOURCE-FILE-NAME:LINENO-1.COLUMN-1-COLUMN-2: MESSAGE
+    SOURCE-FILE-NAME:LINENO-1-LINENO-2: MESSAGE
+    FILE-1:LINENO-1.COLUMN-1-FILE-2:LINENO-2.COLUMN-2: MESSAGE
+  * use getopt for command line options
+    getopt_long
+    support "--verbose", "--help" and "--version" as long option

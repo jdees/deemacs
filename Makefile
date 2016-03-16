@@ -1,7 +1,7 @@
 CC=gcc
 # your platform might need "-lerr" as LDFLAGS
 LDFLAGS+=-lcurses -lc
-CFLAGS+=-std=c11 -Wall -g
+CFLAGS+=-std=c11 -Wall -g --pedantic
 
 all: deemacs
 
