@@ -36,6 +36,7 @@ It includes using
   * perror
   * TMPDIR with fallback to /tmp
   * error msg variants:
+```
     SOURCE-FILE-NAME:LINENO: MESSAGE
     SOURCE-FILE-NAME:LINENO:COLUMN: MESSAGE
     SOURCE-FILE-NAME:LINENO.COLUMN: MESSAGE
@@ -43,6 +44,7 @@ It includes using
     SOURCE-FILE-NAME:LINENO-1.COLUMN-1-COLUMN-2: MESSAGE
     SOURCE-FILE-NAME:LINENO-1-LINENO-2: MESSAGE
     FILE-1:LINENO-1.COLUMN-1-FILE-2:LINENO-2.COLUMN-2: MESSAGE
+```
   * use getopt for command line options
     getopt_long
     support "--verbose", "--help" and "--version" as long option
@@ -51,6 +53,9 @@ License
 -------
 
 Copyright (C) 2016 by Jonathan Dees.
+
 Deemacs is licensed under GPLv3 (see [COPYING](./COPYING) ).
+
 This is free software: you are free to change and redistribute it.
+
 There is NO WARRANTY, to the extent permitted by law.
