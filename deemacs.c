@@ -597,6 +597,7 @@ int main( int argn, char** argv )
 #endif
   bool create_if_not_exists = 0;
 
+/* todo(dees): continue here and use getopt parser
   int c;
   while ((c = getopt(argn, argv, "c"))
   {
@@ -606,7 +607,7 @@ int main( int argn, char** argv )
     default:
       lol;
     }
-  }
+    } */
 
 
   if ( argn == 3 && strcmp( argv[1], "-c" ) == 0 )

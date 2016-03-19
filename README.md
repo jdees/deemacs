@@ -46,3 +46,11 @@ It includes using
   * use getopt for command line options
     getopt_long
     support "--verbose", "--help" and "--version" as long option
+
+License
+-------
+
+Copyright (C) 2016 by Jonathan Dees.
+Deemacs is licensed under GPLv3 (see [COPYING](./COPYING) ).
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
