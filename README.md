@@ -24,7 +24,7 @@ Some important keybindings:
   * Stop current command: ```CTRL+G```
   * Save: ```CTRL+X CTRL+S```
   * Exit: ```CTRL+X CTRL+C```
-  * Show Keybindings: ```CTRL+H B```
+  * Show Keybindings: ```M-?``` or ```CTRL+H B```
 
 Coding Standards
 ----------------
