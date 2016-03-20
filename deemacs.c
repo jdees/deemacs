@@ -10,8 +10,14 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <getopt.h>
+#include <stdbool.h>
 
 #include "input.h"
+#include "version.h"
+
+/* Flag set by ‘--verbose’. */
+static int verbose_flag;
 
 // file informations
 FILE* f;
@@ -589,6 +595,22 @@ void debug_print_buf()
 
 void editor();
 
+const char* deemacs_license_suffix = "\ndeemacs comes with ABSOLUTELY NO WARRANTY."
+"\nYou may redistribute copies of deemacs"
+"\nunder the terms of the GNU General Public License v3."
+"\nFor more information about these matters, see the file named COPYING.\n";
+
+
+const char* usage_string = "usage: deemacs [ FILE | --file=FILE | -f FILE]\n"
+                  "                        [--create=FILE | -c FILE ]\n"
+                  "                        [--version | -v] [--verbose] [--help | -h]\n"
+  "\n"
+  "FILE                       open FILE\n"
+  "--create FILE              create FILE if not exists and open\n"
+  "--help                     print help message\n"
+  "--version                  print version information\n"
+  "--verbose                  be more verbose";
+
 int main( int argn, char** argv )
 {
   setlocale(LC_ALL, "");
@@ -597,30 +619,58 @@ int main( int argn, char** argv )
 #endif
   bool create_if_not_exists = 0;
 
-/* todo(dees): continue here and use getopt parser
+  int num_files = 0; //< must be exactly one at the moment to open it
+
+
+  static struct option long_options[] =
+    {
+      {"verbose", no_argument,       &verbose_flag, 1},
+      /* These options don’t set a flag.
+         We distinguish them by their indices. */
+      {"create",  required_argument, 0, 'c'},
+      {"help",    no_argument,       0, 'h'},
+      {"version", no_argument,       0, 'v'},
+      {"file",    required_argument, 0, 'f'},
+      {0, 0, 0, 0}
+    };
+
   int c;
-  while ((c = getopt(argn, argv, "c"))
+  int option_index; //< not really used (not required)
+  while ((c = getopt_long(argn, argv, "hvc:f:", long_options, &option_index ))!=-1)
   {
     switch (c)
     {
+    case 'h':
+      errx( 0, "%s", usage_string );
+      break;
     case 'c':
+      create_if_not_exists = true; // fallthrough
+    case 'f':
+      ++num_files;
+      file_name = optarg;
+      break;
+    case 'v':
+      printf( "%s%s%s%s", "deemacs ", deemacs_version,
+            "\nCopyright (C) 2016 Jonathan Dees.",
+            deemacs_license_suffix
+        );
+      exit(0);
+      break;
     default:
-      lol;
+      errx( EX_USAGE, "%s", usage_string );
+      break;
     }
-    } */
-
-
-  if ( argn == 3 && strcmp( argv[1], "-c" ) == 0 )
-  {
-    create_if_not_exists = 1;
-    argn = 2;
-    argv[1] = argv[2];
   }
-  if ( argn != 2 )
+  for ( int i = optind /* global var from getopt */ ; i < argn; ++i )
   {
-    errx( EX_USAGE, "%s","usage: deemacs [-c] [file]" );
+    ++num_files;
+    file_name = argv[i];
   }
-  file_name = argv[1];
+  if ( num_files != 1 )
+  {
+    warnx( "%s", "expecting exactly one file argument" );
+    errx( EX_USAGE, "%s", usage_string );
+  }
 
   open_file( create_if_not_exists );
 

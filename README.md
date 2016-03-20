@@ -49,10 +49,16 @@ It includes using
     getopt_long
     support "--verbose", "--help" and "--version" as long option
 
+Contributing
+------------
+
+Feel free to contribute upstream by creating a github pull requests
+to make deemacs even better.
+
 License
 -------
 
-Copyright (C) 2016 by Jonathan Dees.
+Copyright (C) 2016 Jonathan Dees.
 
 Deemacs is licensed under GPLv3 (see [COPYING](./COPYING) ).
 
