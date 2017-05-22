@@ -6,6 +6,7 @@ CFLAGS+=-std=c11 -Wall -g --pedantic
 all: deemacs
 
 deemacs: deemacs.o input.o
+	$(CC) $^ $(LDFLAGS) -o $@
 
 clean:
 	rm *.o deemacs
