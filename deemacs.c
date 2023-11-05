@@ -43,6 +43,9 @@ int cur_buf_c_wanderlust;
 int64_t cur_buf_r() { return buf_r + cur_r; }
 int64_t cur_buf_c() { return buf_c + cur_c; }
 
+// cursor position or wanderlust if bigger
+int64_t cur_buf_c_wander() { return cur_buf_c_wanderlust > buf_c + cur_c ? cur_buf_c_wanderlust : buf_c + cur_c; }
+
 // window informations
 int nrows; //< nrows is minus 1 than actual nrows - this is used for the status bar
 int ncols;
@@ -117,17 +120,17 @@ static void f_save()
   free(tmp);
 }
 
-int try_move_cursor_to_buf_pos( int64_t y, int64_t x );
+int try_move_cursor_to_buf_pos( int64_t y, int64_t x, int with_refresh );
 
 
 static void f_isearch_forward();
 
-static void f_forward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()+1 ) == 0 ) beep(); }
-static void f_backward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1 ) == 0 ) beep(); }
-static void f_next_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c() ) == 0 ) beep(); }
-static void f_previous_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()-1, cur_buf_c() ) == 0 ) beep(); }
-static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), vlen( cur_buf_r() ) ) == 0 ) beep(); }
-static void f_move_beginning_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0 ) == 0 ) beep(); }
+static void f_forward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()+1, 1 ) == 0 ) beep(); }
+static void f_backward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1, 1 ) == 0 ) beep(); }
+static void f_next_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c_wander(), 1 ) == 0 ) beep(); }
+static void f_previous_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()-1, cur_buf_c_wander(), 1 ) == 0 ) beep(); }
+static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), vlen( cur_buf_r() ), 1 ) == 0 ) beep(); }
+static void f_move_beginning_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0, 1 ) == 0 ) beep(); }
 static void f_recenter()
 {
   if ( buf_sz <= nrows || cur_buf_r() < (nrows / 2) )
@@ -148,40 +151,20 @@ static void f_page_down()
     buf_r = buf_sz - 1;
   if ( cur_buf_r() >= buf_sz )
     cur_r = buf_sz - buf_r - 1;
-  int64_t x_max_possible = vlen( cur_buf_r() );
-  int64_t x = cur_buf_c();
-  if ( cur_buf_c_wanderlust > x )
-    x = cur_buf_c_wanderlust;
-  if ( x > x_max_possible )
-  {
-    try_move_cursor_to_buf_pos( cur_buf_r(), x_max_possible );
-    cur_buf_c_wanderlust = x;
-  }
+  try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c_wander(), 0 );
   refresh_all();
 }
 static void f_page_up()
 {
-//  TODO
-  exit(-1);
-
   // emacs adds only nrows-2, we add one more. Emacs also only allows at least 3 rows for a buffer.
   if ( nrows <= 1 )
-    ++buf_r;
+    --buf_r;
   else
-    buf_r += nrows - 1;
-  if ( buf_r >= buf_sz )
-    buf_r = buf_sz - 1;
-  if ( cur_buf_r() >= buf_sz )
-    cur_r = buf_sz - buf_r - 1;
-  int64_t x_max_possible = vlen( cur_buf_r() );
-  int64_t x = cur_buf_c();
-  if ( cur_buf_c_wanderlust > x )
-    x = cur_buf_c_wanderlust;
-  if ( x > x_max_possible )
-  {
-    try_move_cursor_to_buf_pos( cur_buf_r(), x_max_possible );
-    cur_buf_c_wanderlust = x;
-  }
+    buf_r -= nrows - 1;
+  if ( buf_r < 0 )
+    buf_r = 0;
+  assert( cur_buf_r() <= buf_sz );
+  try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c_wander(), 0 );
   refresh_all();
 }
 
@@ -194,7 +177,7 @@ static void f_keyboard_quit() { refresh_all(); beep(); }
 
 static void f_beginning_of_buffer()
 {
-  cur_c = cur_r = buf_r = buf_c = 0;
+  cur_buf_c_wanderlust = cur_c = cur_r = buf_r = buf_c = 0;
   refresh_all();
 }
 
@@ -497,15 +480,21 @@ void add_newline_to_buf( int64_t line_num, int64_t pos )
 }
 
 
-int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
+int try_move_cursor_to_buf_pos( int64_t y, int64_t x, int with_refresh )
 {
   if ( y < 0 || y >= buf_sz || x < 0 )
     return 0;
+
+  cur_buf_c_wanderlust = x;
+
   int64_t len = vlen( y );
-  if ( x > len )
-    return 0;
+  if ( x > len ) {
+    // snap it
+    x = len;
+  }
 
   // Where should cursor go on the display? does it still fit into display?
+
 
   int64_t ydiff = y - buf_r;
   int64_t xdiff = x - buf_c;
@@ -515,6 +504,7 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
     cur_r = ydiff;
     cur_c = xdiff;
     move( cur_r, cur_c );
+    refresh_status_bar(0);
     return 1;
   }
 
@@ -544,7 +534,9 @@ int try_move_cursor_to_buf_pos( int64_t y, int64_t x )
     cur_r = y - buf_r;
   }
 
-  refresh_all();
+  if (with_refresh) {
+    refresh_all();
+  }
 
 /*
   if ( xdiff < 0 )
@@ -972,7 +964,7 @@ static void f_go_to_line()
   if (arg==0)
     return;
   int64_t line = atoll( arg );
-  try_move_cursor_to_buf_pos( line-1, 0 );
+  try_move_cursor_to_buf_pos( line-1, 0, 1 );
 }
 
 
@@ -1003,7 +995,7 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
     if ( first_key == (KBD_CTRL | 'g') )
     {
       if ( cur_buf_c() != c || cur_buf_r() != r )
-        try_move_cursor_to_buf_pos( r, c );
+        try_move_cursor_to_buf_pos( r, c, 1 );
       free(needle);
       return;
     }
@@ -1065,7 +1057,7 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
       }
       else if ( is_found && nmatch == match_next ) //< bingo
       {
-        try_move_cursor_to_buf_pos( rmatch, cmatch + strlen(needle) );
+        try_move_cursor_to_buf_pos( rmatch, cmatch + strlen(needle), 1 );
         cspos = cmatch;
         crpos = rmatch;
         has_matched = 1;
