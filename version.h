@@ -1,2 +1,2 @@
 #pragma once
-const char deemacs_version[] = "v0.1.0";
+const char deemacs_version[] = "v0.4.0";
