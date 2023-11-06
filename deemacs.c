@@ -40,11 +40,11 @@ int cur_r,cur_c;
 int cur_buf_c_wanderlust;
 
 // cursor position in buffer content
-int64_t cur_buf_r() { return buf_r + cur_r; }
-int64_t cur_buf_c() { return buf_c + cur_c; }
+int64_t cur_buf_r(void) { return buf_r + cur_r; }
+int64_t cur_buf_c(void) { return buf_c + cur_c; }
 
 // cursor position or wanderlust if bigger
-int64_t cur_buf_c_wander() { return cur_buf_c_wanderlust > buf_c + cur_c ? cur_buf_c_wanderlust : buf_c + cur_c; }
+int64_t cur_buf_c_wander(void) { return cur_buf_c_wanderlust > buf_c + cur_c ? cur_buf_c_wanderlust : buf_c + cur_c; }
 
 // window informations
 int nrows; //< nrows is minus 1 than actual nrows - this is used for the status bar
@@ -52,7 +52,7 @@ int ncols;
 
 // functions
 
-typedef void (*function_t) (int32_t first, int32_t second);
+typedef void (*function_t) (void);
 
 struct Binding
 {
@@ -62,7 +62,7 @@ struct Binding
   const char* description;
 };
 
-void refresh_all();
+void refresh_all(void);
 
 void refresh_status_bar( const char* extra_info );
 
@@ -97,16 +97,16 @@ int option_show_newlines = 0;
 
 /// >>>> functions begin
 
-static void f_exit()
+static void f_exit(void)
 {
   exit(0);
 }
 
-void write_file();
+void write_file(void);
 void refresh_buffer( int64_t starting_from_line );
 void add_special_buffer_message( int64_t y, int64_t x, const char* line );
 
-static void f_save()
+static void f_save(void)
 {
   char* tmp = malloc( strlen("saving ") + strlen( file_name ) + 1 );
   *tmp = 0;
@@ -123,15 +123,15 @@ static void f_save()
 int try_move_cursor_to_buf_pos( int64_t y, int64_t x, int with_refresh );
 
 
-static void f_isearch_forward();
+static void f_isearch_forward(void);
 
-static void f_forward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()+1, 1 ) == 0 ) beep(); }
-static void f_backward_char() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1, 1 ) == 0 ) beep(); }
-static void f_next_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c_wander(), 1 ) == 0 ) beep(); }
-static void f_previous_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r()-1, cur_buf_c_wander(), 1 ) == 0 ) beep(); }
-static void f_move_end_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), vlen( cur_buf_r() ), 1 ) == 0 ) beep(); }
-static void f_move_beginning_of_line() { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0, 1 ) == 0 ) beep(); }
-static void f_recenter()
+static void f_forward_char(void) { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()+1, 1 ) == 0 ) beep(); }
+static void f_backward_char(void) { if ( try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c()-1, 1 ) == 0 ) beep(); }
+static void f_next_line(void) { if ( try_move_cursor_to_buf_pos( cur_buf_r()+1, cur_buf_c_wander(), 1 ) == 0 ) beep(); }
+static void f_previous_line(void) { if ( try_move_cursor_to_buf_pos( cur_buf_r()-1, cur_buf_c_wander(), 1 ) == 0 ) beep(); }
+static void f_move_end_of_line(void) { if ( try_move_cursor_to_buf_pos( cur_buf_r(), vlen( cur_buf_r() ), 1 ) == 0 ) beep(); }
+static void f_move_beginning_of_line(void) { if ( try_move_cursor_to_buf_pos( cur_buf_r(), 0, 1 ) == 0 ) beep(); }
+static void f_recenter(void)
 {
   if ( buf_sz <= nrows || cur_buf_r() < (nrows / 2) )
     return;
@@ -140,7 +140,7 @@ static void f_recenter()
   buf_r = buf_r - cur_r + old_cur_r;
   refresh_all();
 }
-static void f_page_down()
+static void f_page_down(void)
 {
   // emacs adds only nrows-2, we add one more. Emacs also only allows at least 3 rows for a buffer.
   if ( nrows <= 1 )
@@ -154,7 +154,7 @@ static void f_page_down()
   try_move_cursor_to_buf_pos( cur_buf_r(), cur_buf_c_wander(), 0 );
   refresh_all();
 }
-static void f_page_up()
+static void f_page_up(void)
 {
   // emacs adds only nrows-2, we add one more. Emacs also only allows at least 3 rows for a buffer.
   if ( nrows <= 1 )
@@ -168,20 +168,20 @@ static void f_page_up()
   refresh_all();
 }
 
-static void f_add_return();
+static void f_add_return(void);
 
-static void f_backspace_function();
-static void f_delete_function();
+static void f_backspace_function(void);
+static void f_delete_function(void);
 
-static void f_keyboard_quit() { refresh_all(); beep(); }
+static void f_keyboard_quit(void) { refresh_all(); beep(); }
 
-static void f_beginning_of_buffer()
+static void f_beginning_of_buffer(void)
 {
   cur_buf_c_wanderlust = cur_c = cur_r = buf_r = buf_c = 0;
   refresh_all();
 }
 
-static void f_option_show_newlines()
+static void f_option_show_newlines(void)
 {
   option_show_newlines = ! option_show_newlines;
   const char* msgon = "set show_newlines to on";
@@ -190,13 +190,13 @@ static void f_option_show_newlines()
   refresh_status_bar( option_show_newlines ? msgon : msgoff );
 }
 
-static void f_revert_buffer();
+static void f_revert_buffer(void);
 
-static void f_show_keybindings();
+static void f_show_keybindings(void);
 
-static void f_kill_line();
+static void f_kill_line(void);
 
-static void f_go_to_line();
+static void f_go_to_line(void);
 
 /// <<<< functions end
 
@@ -248,7 +248,7 @@ struct Binding bindings[] =
 }
 ;
 
-void cleanup_at_exit()
+void cleanup_at_exit(void)
 {
   endwin();
 }
@@ -258,7 +258,7 @@ void cleanup( int eval )
   endwin();
 }
 
-void debug_print_buf();
+void debug_print_buf(void);
 
 const int64_t INIT_VEC_SIZE = 16;
 int64_t vec_next_size( int64_t v )
@@ -266,7 +266,7 @@ int64_t vec_next_size( int64_t v )
   return v*2 < INIT_VEC_SIZE ? INIT_VEC_SIZE : v*2;
 }
 
-void write_file()
+void write_file(void)
 {
   f = fopen( file_name, "w+" );
   if ( ! f ) err( EX_IOERR, "%s", file_name );
@@ -311,7 +311,7 @@ void remove_line_from_buf( int64_t line_num )
   --buf_sz;
 }
 
-void free_buffer()
+void free_buffer(void)
 {
   for ( int64_t i = 0; i < buf_sz; ++i )
     free( buf[i] );
@@ -326,7 +326,7 @@ void free_buffer()
 
 void open_file( bool create_if_not_exists );
 
-static void f_revert_buffer()
+static void f_revert_buffer(void)
 {
   free_buffer();
   open_file( 0 );
@@ -357,7 +357,7 @@ void remove_char_from_buf( int64_t line_num, int64_t pos )
   }
 }
 
-static void f_kill_line()
+static void f_kill_line(void)
 {
   int64_t c = cur_buf_c();
   int64_t r = cur_buf_r();
@@ -373,7 +373,7 @@ static void f_kill_line()
   refresh_all();
 }
 
-static void f_show_keybindings()
+static void f_show_keybindings(void)
 {
   for ( int i = 0; i < sizeof(bindings) / sizeof(bindings[0]); ++i )
   {
@@ -409,7 +409,7 @@ static void f_show_keybindings()
 
 }
 
-void f_backspace_function()
+void f_backspace_function(void)
 {
   int64_t c = cur_buf_c();
   int64_t r = cur_buf_r();
@@ -433,7 +433,7 @@ void f_backspace_function()
   refresh_all();
 }
 
-void f_delete_function()
+void f_delete_function(void)
 {
   int64_t c = cur_buf_c();
   int64_t r = cur_buf_r();
@@ -579,13 +579,13 @@ void open_file( bool create_if_not_exists )
   if ( fclose( f ) != 0 ) err( EX_IOERR, "%s", file_name );
 }
 
-void debug_print_buf()
+void debug_print_buf(void)
 {
   for ( int i =0; i<buf_sz; ++i )
     fwrite( buf[i], 1, strlen(buf[i]), stdout );
 }
 
-void editor();
+void editor(void);
 
 const char* deemacs_license_suffix = "\ndeemacs comes with ABSOLUTELY NO WARRANTY."
 "\nYou may redistribute copies of deemacs"
@@ -751,7 +751,7 @@ void refresh_buffer( int64_t starting_from_line )
   move( cur_r, cur_c );
 }
 
-void refresh_all()
+void refresh_all(void)
 {
   refresh_buffer( 0 );
   refresh_status_bar( 0 );
@@ -759,7 +759,7 @@ void refresh_all()
   refresh();
 }
 
-void init_colors()
+void init_colors(void)
 {
   has_color = has_colors();
   if ( ! has_color )
@@ -804,7 +804,7 @@ void f_add_char( int32_t c, int32_t no_key )
 }
 
 
-void f_add_return()
+void f_add_return(void)
 {
   add_newline_to_buf( cur_buf_r(), cur_buf_c() );
   ++cur_r;
@@ -812,7 +812,7 @@ void f_add_return()
   refresh_all();
 }
 
-bool handle_input()
+bool handle_input(void)
 {
   int32_t first_key = deemacs_next_key();
 
@@ -833,7 +833,7 @@ bool handle_input()
       if ( tmp->second == KBD_NOKEY )
       {
         // match
-        tmp->func( first_key, KBD_NOKEY );
+        tmp->func();
         return true;
       }
     }
@@ -864,7 +864,7 @@ bool handle_input()
     struct Binding* tmp = &bindings[i];
     if ( tmp->first == first_key && tmp->second == second_key )
     {
-      tmp->func( first_key, KBD_NOKEY );
+      tmp->func();
       return true;
     }
   }
@@ -958,7 +958,7 @@ char* get_input_line( const char* prefix )
   
 }
 
-static void f_go_to_line()
+static void f_go_to_line(void)
 {
   char* arg = get_input_line( "Goto line: " );
   if (arg==0)
@@ -1093,13 +1093,13 @@ static void isearch( bool backward /* todo(dees): backword is not working, fix *
 
 }
 
-static void f_isearch_forward()
+static void f_isearch_forward(void)
 {
   isearch( false );
 }
 
 
-void editor()
+void editor(void)
 {
   WINDOW* wnd = initscr();
   raw();

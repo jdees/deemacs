@@ -36,6 +36,6 @@
 
 #define KBD_NOKEY                       03777
 
-int32_t deemacs_next_key();
+int32_t deemacs_next_key( void );
 
 char* deemacs_key_to_str_representation( int32_t key );

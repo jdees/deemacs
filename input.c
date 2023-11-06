@@ -209,7 +209,7 @@ char* deemacs_key_to_str_representation( int32_t key )
   return res;
 }
 
-int32_t deemacs_next_key()
+int32_t deemacs_next_key( void )
 {
   int32_t key = codetokey( getch() );
   while ( key == KBD_META )
