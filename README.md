@@ -12,6 +12,14 @@ Install
     $ make
 ```
 
+Install via Homebrew
+--------------------
+
+```
+   $ brew tap jdees/deemacs
+   $ brew install deemacs
+```
+
 Getting started
 ---------------
 
