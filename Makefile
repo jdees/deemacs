@@ -1,4 +1,3 @@
-CC=gcc
 # your platform might need "-lerr" as LDFLAGS
 LDFLAGS+=-lcurses -lc -O2
 CFLAGS+=-std=c11 -Wall --pedantic -O2
